@@ -174,7 +174,8 @@ int net_init(void)
 		str_ncpy(net.ifname6, config.net.ifname,
 			 sizeof(net.ifname6));
 
-		err = net_if_getaddr(config.net.ifname,
+		//err =
+                  net_if_getaddr(config.net.ifname,
 				     AF_INET6, &net.laddr6);
 		if (err) {
 			DEBUG_WARNING("%s: could not get IPv6 address (%m)\n",

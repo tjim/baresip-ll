@@ -30,6 +30,7 @@ static struct {
 	void *arg;                      /**< Handler argument      */
 	bool fullscreen;
 	bool open;
+        double aspect_ratio;
 } sdl;
 
 
@@ -53,9 +54,69 @@ static void sdl_reset(void)
 }
 
 
+static void resize_coords(int w, int h)
+{
+        if (((double)w)/h >= sdl.aspect_ratio) {
+          sdl.size.w = (int)(h * sdl.aspect_ratio);
+          sdl.size.h = h;
+        }
+        else {
+          sdl.size.w = w;
+          sdl.size.h = (int)(w / sdl.aspect_ratio);
+        }
+}
+
 static void handle_resize(int w, int h)
 {
-	struct vidsz size;
+  struct vidsz size;
+  int flags;
+  SDL_Surface *myVideoSurface;
+  const SDL_VideoInfo *vi;
+
+  myVideoSurface = SDL_GetVideoSurface();
+  vi = SDL_GetVideoInfo();
+
+  re_fprintf(stderr, "Trying to set size %dx%d, before was %dx%d\n",
+             w, h, sdl.size.w, sdl.size.h);
+
+  if (!vi) {
+    re_fprintf(stderr, "Current video info null\n");
+  }
+  else {
+    re_fprintf(stderr, "Current video info at %dx%d\n",
+               vi->current_w,
+               vi->current_h);
+  }
+
+  if (!myVideoSurface) {
+    re_fprintf(stderr, "Current surface null\n");
+  }
+  else {
+  re_fprintf(stderr, "Current surface at %dx%d\n",
+             myVideoSurface->w,
+             myVideoSurface->h);
+  }
+
+
+  resize_coords(w,h);
+        
+        flags = SDL_HWSURFACE | SDL_ASYNCBLIT | SDL_HWACCEL;
+
+        if (sdl.fullscreen)
+          flags |= SDL_FULLSCREEN;
+        else if (sdl.resizeh)
+          flags |= SDL_RESIZABLE;
+        sdl.screen = SDL_SetVideoMode(sdl.size.w, sdl.size.h,
+                                      0, flags);
+        if (!sdl.screen) {
+          re_fprintf(stderr, "unable to get video screen: %s\n",
+                     SDL_GetError());
+        }
+
+        if (sdl.screen && (sdl.screen->w != sdl.size.w || sdl.screen->h != sdl.size.h)) {
+            re_fprintf(stderr, "tried to set size %dx%d, got %dx%d\n",
+                       sdl.size.w, sdl.size.h, sdl.screen->w, sdl.screen->h);
+        }
 
 	size.w = w;
 	size.h = h;
@@ -223,18 +284,19 @@ static int display(struct vidisp_st *st, const char *title,
 		       const struct vidframe *frame)
 {
 	SDL_Rect rect;
+        const SDL_VideoInfo *vi;
 
-	if (!st || !sdl.open)
+	if (!st || !sdl.open || !frame)
 		return EINVAL;
 
-	if (!vidsz_cmp(&sdl.size, &frame->size)) {
-		if (sdl.size.w && sdl.size.h) {
-			re_printf("SDL reset: %ux%u ---> %ux%u\n",
-				  sdl.size.w, sdl.size.h,
-				  frame->size.w, frame->size.h);
-		}
-		sdl_reset();
-	}
+//	if (!vidsz_cmp(&sdl.size, &frame->size)) {
+//		if (sdl.size.w && sdl.size.h) {
+//			re_printf("SDL reset: %ux%u ---> %ux%u\n",
+//				  sdl.size.w, sdl.size.h,
+//				  frame->size.w, frame->size.h);
+//		}
+//		sdl_reset();
+//	}
 
 	if (!sdl.screen) {
 		int flags = SDL_HWSURFACE | SDL_ASYNCBLIT | SDL_HWACCEL;
@@ -256,15 +318,26 @@ static int display(struct vidisp_st *st, const char *title,
 
 		SDL_WM_SetCaption(capt, capt);
 
-		sdl.screen = SDL_SetVideoMode(frame->size.w, frame->size.h,
-					      0, flags);
+                if (sdl.aspect_ratio == 0.0) {
+                  if (frame->size.h == 0) return EINVAL;
+                  sdl.aspect_ratio = ((double)frame->size.w)/frame->size.h;
+                  sdl_reset();
+                }
+
+                vi = SDL_GetVideoInfo();
+                
+                sdl.screen = SDL_SetVideoMode(vi->current_w,
+                                              vi->current_h,
+                                              0, flags);
+                resize_coords(vi->current_w, vi->current_h);
+
+                //                handle_resize(frame->size.w, frame->size.h);
+
 		if (!sdl.screen) {
 			re_fprintf(stderr, "unable to get video screen: %s\n",
 				   SDL_GetError());
 			return ENODEV;
 		}
-
-		sdl.size = frame->size;
 	}
 
 	if (!sdl.bmp) {

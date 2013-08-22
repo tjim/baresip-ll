@@ -216,6 +216,8 @@ static int module_init(void)
 			opus.app = OPUS_APPLICATION_VOIP;
 		else if (!pl_strcasecmp(&pl, "audio"))
 			opus.app = OPUS_APPLICATION_AUDIO;
+		else if (!pl_strcasecmp(&pl, "lowdelay"))
+			opus.app = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
 		else {
 			DEBUG_WARNING("unknown application: %r\n", &pl);
 		}
